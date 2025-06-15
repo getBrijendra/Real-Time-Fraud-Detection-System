@@ -1,0 +1,27 @@
+groups:
+  - name: fraud-model
+    rules:
+      - alert: FraudDataDrift
+        expr: fraud_drift_detected == 1
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: "Live traffic drifted from the training reference - consider retraining (python -m fraud.retrain)"
+      - alert: FraudScoreDrift
+        expr: fraud_score_psi > 0.25
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "Fraud score distribution PSI {{ $value | printf \"%.2f\" }} > 0.25"
+      - alert: FraudInferenceLatencyHigh
+        expr: histogram_quantile(0.99, sum(rate(fraud_inference_latency_seconds_bucket[5m])) by (le)) > 0.05
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "p99 inference latency above 50ms"
+      - alert: FraudAlertRateSpike
+        expr: sum(rate(fraud_predictions_total{decision="fraud"}[5m])) / sum(rate(fraud_predictions_total[5m])) > 0.01
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "More than 1% of transactions flagged - analyst queue / false positive cost at risk"

@@ -1,0 +1,141 @@
+{
+  "operating_points": [
+    {
+      "operating point": "cost-optimal (deployed)",
+      "threshold": 0.809536337852478,
+      "recall": 0.7466666666666667,
+      "precision": 0.8888888888888888,
+      "FPR": 0.00012305096067642872,
+      "alerts/100k": 110.6000491555774,
+      "false pos/100k": 12.288894350619712,
+      "FP cost/100k $": 184.33341525929566,
+      "fraud missed/100k $": 5133.299392577508,
+      "total cost/100k $": 5809.188581861592,
+      "savings/100k $": 9734.963659983849
+    },
+    {
+      "operating point": "naive 0.5",
+      "threshold": 0.5,
+      "recall": 0.76,
+      "precision": 0.8769230769230769,
+      "FPR": 0.00014062966934448996,
+      "alerts/100k": 114.11116182718304,
+      "false pos/100k": 14.044450686422527,
+      "FP cost/100k $": 210.6667602963379,
+      "fraud missed/100k $": 5105.631824725256,
+      "total cost/100k $": 5816.632140725395,
+      "savings/100k $": 9727.520101120044
+    },
+    {
+      "operating point": "FPR <= 0.1% (set on val)",
+      "threshold": 0.17761586606502533,
+      "recall": 0.7733333333333333,
+      "precision": 0.651685393258427,
+      "FPR": 0.0005449399687098986,
+      "alerts/100k": 156.24451388645062,
+      "false pos/100k": 54.42224640988729,
+      "FP cost/100k $": 816.3336961483094,
+      "fraud missed/100k $": 4662.775183455637,
+      "total cost/100k $": 5988.220216986762,
+      "savings/100k $": 9555.932024858677
+    },
+    {
+      "operating point": "FPR <= 0.5% (set on val)",
+      "threshold": 0.01762382872402668,
+      "recall": 0.8666666666666667,
+      "precision": 0.22108843537414966,
+      "FPR": 0.004025524284986025,
+      "alerts/100k": 516.1335627260279,
+      "false pos/100k": 402.02240089884486,
+      "FP cost/100k $": 6030.336013482673,
+      "fraud missed/100k $": 4388.697728310101,
+      "total cost/100k $": 10989.589550928687,
+      "savings/100k $": 4554.562690916753
+    },
+    {
+      "operating point": "FPR <= 1.0% (set on val)",
+      "threshold": 0.009207839146256447,
+      "recall": 0.88,
+      "precision": 0.12643678160919541,
+      "FPR": 0.008015891152635927,
+      "alerts/100k": 916.4004072890699,
+      "false pos/100k": 800.533689126084,
+      "FP cost/100k $": 12008.005336891261,
+      "fraud missed/100k $": 3248.814999473333,
+      "total cost/100k $": 15836.153927179523,
+      "savings/100k $": -292.00168533408225
+    }
+  ],
+  "sensitivity": [
+    {
+      "cost per false positive $": 5.0,
+      "optimal threshold": 0.809536337852478,
+      "recall": 0.7466666666666667,
+      "precision": 0.8888888888888888,
+      "false pos/100k": 12.288894350619712,
+      "FP cost/100k $": 61.444471753098554,
+      "total cost/100k $": 5686.2996383553955,
+      "FP share of cost": 0.010805704176867765
+    },
+    {
+      "cost per false positive $": 10.0,
+      "optimal threshold": 0.809536337852478,
+      "recall": 0.7466666666666667,
+      "precision": 0.8888888888888888,
+      "false pos/100k": 12.288894350619712,
+      "FP cost/100k $": 122.88894350619711,
+      "total cost/100k $": 5747.744110108493,
+      "FP share of cost": 0.021380378310522506
+    },
+    {
+      "cost per false positive $": 15.0,
+      "optimal threshold": 0.809536337852478,
+      "recall": 0.7466666666666667,
+      "precision": 0.8888888888888888,
+      "false pos/100k": 12.288894350619712,
+      "FP cost/100k $": 184.33341525929566,
+      "total cost/100k $": 5809.188581861592,
+      "FP share of cost": 0.03173135329688761
+    },
+    {
+      "cost per false positive $": 30.0,
+      "optimal threshold": 0.809536337852478,
+      "recall": 0.7466666666666667,
+      "precision": 0.8888888888888888,
+      "false pos/100k": 12.288894350619712,
+      "FP cost/100k $": 368.6668305185913,
+      "total cost/100k $": 5993.521997120888,
+      "FP share of cost": 0.06151088303266228
+    },
+    {
+      "cost per false positive $": 55.0,
+      "optimal threshold": 0.809536337852478,
+      "recall": 0.7466666666666667,
+      "precision": 0.8888888888888888,
+      "false pos/100k": 12.288894350619712,
+      "FP cost/100k $": 675.8891892840841,
+      "total cost/100k $": 6300.744355886381,
+      "FP share of cost": 0.10727132400676505
+    },
+    {
+      "cost per false positive $": 105.0,
+      "optimal threshold": 0.809536337852478,
+      "recall": 0.7466666666666667,
+      "precision": 0.8888888888888888,
+      "false pos/100k": 12.288894350619712,
+      "FP cost/100k $": 1290.3339068150697,
+      "total cost/100k $": 6915.189073417367,
+      "FP share of cost": 0.1865941615067669
+    },
+    {
+      "cost per false positive $": 255.0,
+      "optimal threshold": 0.9399042725563049,
+      "recall": 0.7066666666666667,
+      "precision": 0.9636363636363636,
+      "false pos/100k": 3.511112671605632,
+      "FP cost/100k $": 895.3337312594361,
+      "total cost/100k $": 8408.219514764229,
+      "FP share of cost": 0.10648315373870705
+    }
+  ]
+}

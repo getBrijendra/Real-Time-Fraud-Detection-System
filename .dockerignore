@@ -1,0 +1,10 @@
+.venv
+data
+artifacts
+reports
+mlruns
+mlartifacts
+mlflow.db
+**/__pycache__
+.pytest_cache
+*.egg-info

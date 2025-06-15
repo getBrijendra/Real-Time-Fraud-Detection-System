@@ -1,0 +1,105 @@
+# Central configuration. Relative paths are resolved against the project root.
+# Environment variables override selected values (see src/fraud/config.py).
+
+seed: 42
+
+data:
+  raw_path: data/raw/creditcard.csv
+  kaggle_dataset: mlg-ulb/creditcardfraud
+  # Public mirror of the identical Kaggle file, used when no Kaggle API token is configured.
+  mirror_url: https://storage.googleapis.com/download.tensorflow.org/data/creditcard.csv
+  # Chronological split (the data spans ~48h): train on the past, validate/test on the future.
+  train_frac: 0.60
+  val_frac: 0.20           # test = remaining 0.20; the test window is also replayed as the live stream
+  stream_path: data/stream/stream.parquet
+
+# Business cost model (USD). Used to pick the alert threshold and to report cost.
+business:
+  review_cost: 5.0          # analyst time spent on every alert (true or false)
+  fp_friction_cost: 10.0    # extra cost of a false alert: blocked customer, support call, churn risk
+  chargeback_fee: 15.0      # fee paid on top of the stolen amount for every missed fraud
+
+metrics:
+  target_fprs: [0.001, 0.005, 0.01]   # report recall at these false-positive rates
+
+# Experiments: model family x class-imbalance strategy.
+models:
+  logreg_unweighted:   {type: logreg, imbalance: none}
+  logreg_balanced:     {type: logreg, imbalance: class_weight}
+  logreg_smote:        {type: logreg, imbalance: smote}
+  logreg_undersample:  {type: logreg, imbalance: undersample}
+  random_forest:       {type: random_forest, imbalance: class_weight}
+  xgboost_unweighted:  {type: xgboost, imbalance: none}
+  xgboost:             {type: xgboost, imbalance: scale_pos_weight}
+  isolation_forest:    {type: isolation_forest, imbalance: none}
+
+model_params:
+  logreg: {C: 0.1, max_iter: 2000}
+  random_forest: {n_estimators: 300, min_samples_leaf: 2, max_features: sqrt}
+  xgboost:
+    n_estimators: 2000          # upper bound; early stopping picks the real number
+    learning_rate: 0.03
+    max_depth: 5
+    subsample: 0.8
+    colsample_bytree: 0.7
+    min_child_weight: 1
+    # Early stopping on log-loss: with only ~50 frauds in the inner validation slice, aucpr is too noisy
+    # and stops after ~50 trees; log-loss is smooth and stops near ~350 (validation PR-AUC 0.76 -> 0.78).
+    eval_metric: logloss
+    early_stopping_rounds: 200
+    # scale_pos_weight = (neg/pos) ** power. 1.0 = full re-weighting, 0.5 = sqrt (better-calibrated, usually equal PR-AUC)
+    spw_power: 0.5
+  isolation_forest: {n_estimators: 300, max_samples: 512}
+  smote: {sampling_strategy: 0.1, k_neighbors: 5}
+  undersample: {sampling_strategy: 0.05}
+
+# Champion = best validation PR-AUC among models that meet the real-time latency budget
+# (single transaction, in-process). Large random forests are accurate but slow to score one row.
+selection:
+  metric: val_pr_auc
+  max_latency_p50_ms: 10
+
+artifacts:
+  champion_dir: artifacts/champion
+  archive_dir: artifacts/archive
+  reports_dir: reports
+
+mlflow:
+  tracking_uri: sqlite:///mlflow.db          # override with MLFLOW_TRACKING_URI
+  artifact_dir: mlartifacts
+  experiment: fraud-detection
+  registered_model: fraud-detector
+
+serving:
+  api_url: http://localhost:8000              # override with API_URL
+  store_path: data/store/predictions.db       # predictions + delayed labels (feedback loop)
+  explain_top_k: 5
+  risk_bands: {medium: 0.5}                   # score >= medium*threshold -> "medium"; >= threshold -> "high"
+
+kafka:
+  bootstrap_servers: localhost:9092           # override with KAFKA_BOOTSTRAP_SERVERS
+  transactions_topic: transactions
+  labels_topic: transaction-labels
+  scored_topic: scored-transactions
+  alerts_topic: fraud-alerts
+  consumer_group: fraud-scorer
+
+monitoring:
+  # Reference = validation window: the most recent pre-deployment data (also where the threshold was tuned).
+  # The data has genuine day-over-day shift (e.g. V1 PSI ~1.5 between day 1 and day 2 evening), so a
+  # training-window reference would raise drift alarms on perfectly normal traffic.
+  window_size: 2000          # rolling window of live traffic compared with the reference
+  min_samples: 500           # don't report drift until this many live samples are in the window
+  check_every: 250           # recompute drift after this many predictions
+  psi_bins: 10
+  psi_warn: 0.10
+  psi_alert: 0.25
+  drift_min_features: 1      # dataset drift = this many features at alert level, or score PSI at alert level
+  # Calendar features are seasonal by construction: a live window spans a few hours, not a full day.
+  exclude_features: [hour_sin, hour_cos]
+
+retraining:
+  min_new_labels: 2000       # labeled feedback rows needed before retraining makes sense
+  min_new_frauds: 10
+  holdout_frac: 0.30         # most recent share of feedback used to compare champion vs challenger
+  min_pr_auc_gain: 0.0       # challenger must be at least this much better to be promoted

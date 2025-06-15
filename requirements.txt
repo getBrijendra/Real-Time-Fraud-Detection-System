@@ -1,0 +1,22 @@
+# Pinned: the serving bundle is a joblib pickle, so training and serving must use the same
+# scikit-learn / xgboost / imbalanced-learn / numpy versions (incl. inside the Docker image).
+numpy==2.5.5
+pandas==3.1.1
+pyarrow==26.0.1
+scipy==1.18.1
+scikit-learn==1.9.1
+imbalanced-learn==0.14.2
+xgboost==3.4.1
+skops==0.16.0
+mlflow==3.18.0
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
+pydantic==2.14.4
+prometheus-client==0.26.0
+confluent-kafka==2.16.2
+httpx==0.28.1
+pyyaml==6.0.4
+joblib==1.6.0
+matplotlib==3.11.2
+pytest==9.2.0
+kaggle==2.2.5
