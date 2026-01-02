@@ -4,19 +4,69 @@ Detects suspicious card transactions in real time, scores fraud risk, and explai
 
 **Dataset:** [Credit Card Fraud Detection (mlg-ulb, Kaggle)](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud). It contains 284,807 European card transactions over 48 hours, of which 492 are frauds (0.172%). Features `V1..V28` are anonymised PCA components, plus `Time` and `Amount`.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph OFFLINE["1 - Offline training"]
+        DS[("Kaggle dataset<br/>284,807 transactions")]
+        TRAIN["train.py<br/>8 experiments<br/>chronological split"]
+        DS --> TRAIN
+    end
+
+    subgraph REGISTRY["MLflow"]
+        MLF[("Tracking + model registry<br/>@champion alias")]
+    end
+
+    subgraph STREAM["2 - Streaming (Kafka)"]
+        PROD["Producer<br/>replays test window<br/>+ drift injection"]
+        T1{{"transactions"}}
+        T2{{"transaction-labels<br/>(delayed chargebacks)"}}
+        CONS["Consumer<br/>micro-batches events"]
+        T3{{"scored-transactions"}}
+        T4{{"fraud-alerts<br/>+ explanation"}}
+        PROD --> T1 --> CONS
+        PROD --> T2 --> CONS
+        CONS --> T3
+        CONS --> T4
+    end
+
+    subgraph SERVE["3 - FastAPI scoring service"]
+        MODEL["XGBoost model<br/>+ TreeSHAP explanations"]
+        THR["Cost-optimal<br/>alert threshold"]
+        DRIFT["Drift monitor<br/>PSI / KS"]
+        DB[("SQLite<br/>prediction + label store")]
+        MODEL --> THR
+        MODEL --> DRIFT
+        THR --> DB
+    end
+
+    subgraph MON["4 - Monitoring"]
+        PROM["Prometheus<br/>metrics + alert rules"]
+        GRAF["Grafana dashboard"]
+        PROM --> GRAF
+    end
+
+    RETRAIN["5 - retrain.py<br/>champion vs challenger"]
+
+    TRAIN -- "log runs, register champion" --> MLF
+    MLF -- "load @champion" --> MODEL
+    CONS -- "POST /predict/batch" --> MODEL
+    CONS -- "POST /feedback" --> DB
+    SERVE -- "GET /metrics" --> PROM
+    DB -- "new labels" --> RETRAIN
+    DRIFT -- "drift detected" --> RETRAIN
+    RETRAIN -- "register + promote" --> MLF
+    RETRAIN -- "POST /admin/reload" --> SERVE
 ```
-                    ┌──────────────┐  transactions    ┌──────────────┐  POST /predict/batch  ┌─────────────────────────┐
- replay test window │   producer   │ ───────────────▶ │   consumer   │ ────────────────────▶ │  FastAPI scoring service │
- (+ drift injection)│   (Kafka)    │  transaction-    │ micro-batch  │  POST /feedback       │  XGBoost + TreeSHAP      │
-                    └──────────────┘  labels (delayed)└──────┬───────┘ ────────────────────▶ │  cost-optimal threshold  │
-                                                             │ scored-transactions          │  drift monitor (PSI/KS)  │
-                                                             │ fraud-alerts (+ explanation) │  SQLite prediction store │
-                                                             ▼                              └───────────┬─────────────┘
-                                                        Kafka topics                         /metrics   │  labels + drift
-                                                                                  Prometheus ◀──────────┤
-                                                                                  + Grafana             ▼
-                                         MLflow tracking + registry ◀──── train.py / retrain.py (champion/challenger)
-```
+
+How the pieces fit together:
+
+1. **Offline training.** `train.py` trains 8 model/imbalance combinations on a chronological split, picks the champion by validation PR-AUC within the latency budget, and registers it in MLflow under the `@champion` alias.
+2. **Streaming.** The producer replays the unseen test window as live traffic on the `transactions` topic, optionally injecting drift. It also sends the true labels later on `transaction-labels`, simulating chargebacks.
+3. **Scoring.** The consumer micro-batches transactions and calls `POST /predict/batch`. The API scores each one with XGBoost, applies the cost-optimal threshold, and explains flagged ones with TreeSHAP. The consumer publishes results to `scored-transactions` and alerts to `fraud-alerts`. Delayed labels go to `POST /feedback` and are stored next to the predictions.
+4. **Monitoring.** The API compares live feature and score distributions with the validation window (PSI / KS) and exposes latency, drift, precision/recall and business cost at `/metrics`. Prometheus scrapes them and fires alerts; Grafana shows the dashboard.
+5. **Retraining.** When drift is detected or enough new labels arrive, `retrain.py` trains a challenger, compares it with the champion on the newest labelled data, and only promotes it if it is better. Promotion updates MLflow and hot-reloads the API with no downtime.
 
 ## What's inside
 
