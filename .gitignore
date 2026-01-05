@@ -2,9 +2,14 @@
 __pycache__/
 *.egg-info/
 .pytest_cache/
-data/
-artifacts/
-mlruns/
-mlartifacts/
-mlflow.db
 *.log
+mlruns/
+
+# Raw dataset is 144 MB (over GitHub's 100 MB limit); download with `python -m fraud.data`
+data/raw/
+
+# Committed on purpose so the repo can be used as-is for analysis:
+#   artifacts/          champion + archived model bundles
+#   mlartifacts/        MLflow run artifacts and registered models
+#   mlflow.db           MLflow tracking + registry database
+#   data/stream/        prepared replay stream (16 MB)
