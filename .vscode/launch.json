@@ -1,0 +1,250 @@
+{
+  // Debug configurations for the fraud-detection lifecycle. See docs/DEBUGGING.md for the breakpoint map.
+  //
+  // Every config except the tests runs against the .debug/ sandbox (FRAUD_CONFIG=.debug/config.yaml,
+  // generated from configs/config.yaml by scripts/debug_sandbox.py). Debug runs therefore never touch
+  // artifacts/champion, mlflow.db, mlartifacts/, reports/ or data/stream. The env overrides below are
+  // blanked so a globally set MLFLOW_TRACKING_URI etc. cannot leak debug runs into real state.
+  //
+  // Suggested order: 1 Train -> 2 API -> 3 Producer (HTTP) -> 4 Retrain check -> 5 Retrain promote.
+  "version": "0.2.0",
+  "configurations": [
+    // ------------------------------------------------------------------ 1. offline training
+    {
+      "name": "1a. Train: fast (logreg_balanced + xgboost)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "fraud.train",
+      "args": ["--models", "logreg_balanced", "xgboost"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FRAUD_CONFIG": "${workspaceFolder}/.debug/config.yaml",
+        "MLFLOW_TRACKING_URI": "", "FRAUD_MODEL_DIR": "", "FRAUD_STORE_PATH": "", "PYTHONUNBUFFERED": "1"
+      },
+      "preLaunchTask": "debug: prepare sandbox",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "1b. Train: all 8 experiments (~4 min)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "fraud.train",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FRAUD_CONFIG": "${workspaceFolder}/.debug/config.yaml",
+        "MLFLOW_TRACKING_URI": "", "FRAUD_MODEL_DIR": "", "FRAUD_STORE_PATH": "", "PYTHONUNBUFFERED": "1"
+      },
+      "preLaunchTask": "debug: prepare sandbox",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "1c. Data: download / validate dataset",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "fraud.data",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+
+    // ------------------------------------------------------------------ 2. online scoring
+    {
+      "name": "2. API: uvicorn (sandbox)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      // no --reload: the reloader runs the app in a child process the debugger does not attach to
+      "args": ["fraud.api.app:app", "--host", "127.0.0.1", "--port", "8000"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FRAUD_CONFIG": "${workspaceFolder}/.debug/config.yaml",
+        "MLFLOW_TRACKING_URI": "", "FRAUD_MODEL_DIR": "", "FRAUD_STORE_PATH": "", "PYTHONUNBUFFERED": "1"
+      },
+      "preLaunchTask": "debug: prepare sandbox",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "3a. Producer -> API over HTTP (no Kafka, drift after 3000)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "fraud.streaming.producer",
+      "args": ["--sink", "http", "--batch", "100", "--rate", "100", "--limit", "6000",
+               "--label-delay", "2", "--drift-after", "3000", "--drift-type", "both", "--drift-strength", "1.0"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FRAUD_CONFIG": "${workspaceFolder}/.debug/config.yaml",
+        "MLFLOW_TRACKING_URI": "", "FRAUD_MODEL_DIR": "", "FRAUD_STORE_PATH": "", "PYTHONUNBUFFERED": "1",
+        "API_URL": "http://127.0.0.1:8000"
+      },
+      "preLaunchTask": "debug: wait for API",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "3b. Producer -> Kafka (needs Docker)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "fraud.streaming.producer",
+      "args": ["--rate", "100", "--limit", "6000", "--label-delay", "2",
+               "--drift-after", "3000", "--drift-type", "both", "--drift-strength", "1.0"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FRAUD_CONFIG": "${workspaceFolder}/.debug/config.yaml",
+        "MLFLOW_TRACKING_URI": "", "FRAUD_MODEL_DIR": "", "FRAUD_STORE_PATH": "", "PYTHONUNBUFFERED": "1",
+        "KAFKA_BOOTSTRAP_SERVERS": "localhost:9092"
+      },
+      "preLaunchTask": "debug: start Kafka + sandbox",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "3c. Consumer: Kafka -> API -> Kafka (needs Docker)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "fraud.streaming.consumer",
+      "args": ["--max-batch", "200", "--idle-exit", "120"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FRAUD_CONFIG": "${workspaceFolder}/.debug/config.yaml",
+        "MLFLOW_TRACKING_URI": "", "FRAUD_MODEL_DIR": "", "FRAUD_STORE_PATH": "", "PYTHONUNBUFFERED": "1",
+        "KAFKA_BOOTSTRAP_SERVERS": "localhost:9092", "API_URL": "http://127.0.0.1:8000"
+      },
+      "preLaunchTask": "debug: start Kafka + wait for API",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+
+    // ------------------------------------------------------------------ 4/5. retraining lifecycle
+    {
+      "name": "4. Retrain: check triggers only",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "fraud.retrain",
+      "args": ["--check"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FRAUD_CONFIG": "${workspaceFolder}/.debug/config.yaml",
+        "MLFLOW_TRACKING_URI": "", "FRAUD_MODEL_DIR": "", "FRAUD_STORE_PATH": "", "PYTHONUNBUFFERED": "1"
+      },
+      "preLaunchTask": "debug: prepare sandbox",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "5a. Retrain: force, normal promotion rule",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "fraud.retrain",
+      "args": ["--force"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FRAUD_CONFIG": "${workspaceFolder}/.debug/config.yaml",
+        "MLFLOW_TRACKING_URI": "", "FRAUD_MODEL_DIR": "", "FRAUD_STORE_PATH": "", "PYTHONUNBUFFERED": "1"
+      },
+      "preLaunchTask": "debug: prepare sandbox",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "5b. Retrain: force + always promote + hot-reload API",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "fraud.retrain",
+      // --min-gain -1 guarantees the promotion branch runs (register -> archive -> /admin/reload)
+      "args": ["--force", "--min-gain", "-1", "--reload-url", "http://127.0.0.1:8000"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FRAUD_CONFIG": "${workspaceFolder}/.debug/config.yaml",
+        "MLFLOW_TRACKING_URI": "", "FRAUD_MODEL_DIR": "", "FRAUD_STORE_PATH": "", "PYTHONUNBUFFERED": "1"
+      },
+      "preLaunchTask": "debug: wait for API",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "5c. Retrain: rollback to archived version",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "fraud.retrain",
+      "args": ["--rollback", "${input:archiveVersion}"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FRAUD_CONFIG": "${workspaceFolder}/.debug/config.yaml",
+        "MLFLOW_TRACKING_URI": "", "FRAUD_MODEL_DIR": "", "FRAUD_STORE_PATH": "", "PYTHONUNBUFFERED": "1"
+      },
+      "preLaunchTask": "debug: prepare sandbox",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+
+    // ------------------------------------------------------------------ scripts / tests
+    {
+      "name": "Script: current file (sandbox)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FRAUD_CONFIG": "${workspaceFolder}/.debug/config.yaml",
+        "MLFLOW_TRACKING_URI": "", "FRAUD_MODEL_DIR": "", "FRAUD_STORE_PATH": "", "PYTHONUNBUFFERED": "1"
+      },
+      "preLaunchTask": "debug: prepare sandbox",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Tests: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-q", "-x"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Tests: all",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q", "-x"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      // Used by the Testing sidebar's "Debug Test" buttons
+      "name": "Tests: Testing-sidebar debug",
+      "type": "debugpy",
+      "request": "launch",
+      "purpose": ["debug-test"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ],
+
+  "compounds": [
+    {
+      "name": "Live flow: API + Producer over HTTP (no Kafka)",
+      "configurations": ["2. API: uvicorn (sandbox)", "3a. Producer -> API over HTTP (no Kafka, drift after 3000)"],
+      "stopAll": true
+    },
+    {
+      "name": "Live flow: API + Consumer + Producer via Kafka",
+      "configurations": ["2. API: uvicorn (sandbox)", "3c. Consumer: Kafka -> API -> Kafka (needs Docker)",
+                         "3b. Producer -> Kafka (needs Docker)"],
+      "stopAll": true
+    }
+  ],
+
+  "inputs": [
+    {
+      "id": "archiveVersion",
+      "type": "promptString",
+      "description": "Archived bundle folder name under .debug/artifacts/archive (e.g. 20261123085741-v1)"
+    }
+  ]
+}

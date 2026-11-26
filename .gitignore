@@ -13,3 +13,6 @@ data/raw/
 #   mlartifacts/        MLflow run artifacts and registered models
 #   mlflow.db           MLflow tracking + registry database
 #   data/stream/        prepared replay stream (16 MB)
+
+# VS Code debug sandbox (scripts/debug_sandbox.py)
+.debug/

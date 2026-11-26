@@ -1,6 +1,6 @@
 # Full stack: Kafka + MLflow + scoring API + stream consumer + Prometheus + Grafana.
 #
-#   docker compose up -d kafka mlflow                 # infrastructure
+#   docker compose up -d kafka kafka-ui mlflow        # infrastructure
 #   docker compose run --rm trainer                   # train all baselines -> MLflow + artifacts/champion
 #   docker compose up -d api consumer prometheus grafana
 #   docker compose run --rm producer                  # replay the test window as a live stream
@@ -8,6 +8,7 @@
 #
 # UIs: API docs http://localhost:8000/docs | MLflow http://localhost:5000
 #      Prometheus http://localhost:9090   | Grafana http://localhost:3000 (dashboard "Fraud Detection")
+#      Kafka UI http://localhost:8080
 
 x-app: &app
   build: .
@@ -48,6 +49,17 @@ services:
       interval: 10s
       timeout: 10s
       retries: 12
+
+  kafka-ui:   # browse topics, messages, partitions and consumer-group lag
+    image: kafbat/kafka-ui:v1.3.0
+    container_name: fraud-kafka-ui
+    ports: ["8080:8080"]
+    depends_on:
+      kafka: {condition: service_healthy}
+    environment:
+      KAFKA_CLUSTERS_0_NAME: fraud-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092   # internal listener (localhost:9092 is for the host)
+      DYNAMIC_CONFIG_ENABLED: "false"
 
   mlflow:
     <<: *app

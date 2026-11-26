@@ -1,0 +1,64 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "debug: prepare sandbox",
+      "detail": "Write .debug/config.yaml and seed the sandbox (scripts/debug_sandbox.py)",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["${workspaceFolder}/scripts/debug_sandbox.py"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "debug: wait for API",
+      "detail": "Prepare sandbox, then block until http://127.0.0.1:8000/health answers",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["${workspaceFolder}/scripts/debug_sandbox.py", "--wait-api", "http://127.0.0.1:8000"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "silent", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "debug: start Kafka + wait for API",
+      "detail": "docker compose up -d kafka, then wait for the local API",
+      "dependsOrder": "sequence",
+      "dependsOn": ["debug: start Kafka", "debug: wait for API"],
+      "problemMatcher": []
+    },
+    {
+      "label": "debug: start Kafka + sandbox",
+      "dependsOrder": "sequence",
+      "dependsOn": ["debug: start Kafka", "debug: prepare sandbox"],
+      "problemMatcher": []
+    },
+    {
+      "label": "debug: start Kafka",
+      "type": "shell",
+      "command": "docker compose up -d kafka",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "silent", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "debug: reset sandbox",
+      "detail": "Delete .debug/ (champion, MLflow db, prediction store, reports of debug runs)",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-c", "import shutil; shutil.rmtree('.debug', ignore_errors=True); print('.debug removed')"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "debug: MLflow UI (sandbox)",
+      "detail": "Browse the runs/registry created by debug sessions at http://127.0.0.1:5001",
+      "type": "shell",
+      "command": "\"${command:python.interpreterPath}\" -m mlflow ui --backend-store-uri sqlite:///.debug/mlflow.db --port 5001",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}
